@@ -1,0 +1,49 @@
+# typed: false
+# frozen_string_literal: true
+
+class BBPipelineWait < Formula
+  desc "Tool to log to standard out when the status of a web service changes."
+  homepage "https://github.com/scottmmjackson/bbpipelinewait"
+  version "${VERSION}"
+
+  on_macos do
+    if Hardware::CPU.intel?
+      url "${X86_DARWIN_RELEASE_URL}"
+      sha256 "${X86_DARWIN_RELEASE_SHA}"
+
+      def install
+        bin.install "bbpipelinewait"
+      end
+    end
+    if Hardware::CPU.arm?
+      url "${ARM64_DARWIN_RELEASE_URL}"
+      sha256 "${ARM64_DARWIN_RELEASE_SHA}"
+
+      def install
+        bin.install "bbpipelinewait"
+      end
+    end
+  end
+  on_linux do
+    if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+      url "${ARM64_LINUX_RELEASE_URL}"
+      sha256 "${ARM64_LINUX_RELEASE_SHA}"
+
+      def install
+        bin.install "bbpipelinewait"
+      end
+    end
+    if Hardware::CPU.intel?
+      url "${X86_LINUX_RELEASE_URL}"
+      sha256 "${X86_LINUX_RELEASE_SHA}"
+
+      def install
+        bin.install "bbpipelinewait"
+      end
+    end
+  end
+
+  test do
+    system "#{bin}/bbpipelinewait --version"
+  end
+end
