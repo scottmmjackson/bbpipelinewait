@@ -6,9 +6,12 @@ use std::fs;
 use base64::{engine, Engine};
 use reqwest::Url;
 use serde::de::DeserializeOwned;
+use spinner::{SpinnerBuilder};
 use strum_macros::{Display, EnumString};
 #[allow(unused_imports)]
 use strum;
+
+const SPINNER: [&str; 4] = ["▖", "▘","▝","▗"];
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ConfigFile {
@@ -95,7 +98,7 @@ struct BitbucketError {
 }
 
 fn main() {
-    let matches = App::new("bbpipelinewait")
+    let mut app = App::new("bbpipelinewait")
         .version("1.0")
         .about("Tool to list running bitbucket pipelines and wait for them to stop.")
         .subcommand(
@@ -144,8 +147,8 @@ fn main() {
         .subcommand(
             SubCommand::with_name("init")
                 .about("Initializes configuration file")
-        )
-        .get_matches();
+        );
+    let matches = app.clone().get_matches();
 
     if let Some(_) = matches.subcommand_matches("init") {
         init_config();
@@ -166,7 +169,8 @@ fn main() {
             matches.subcommand_matches("wait").unwrap().value_of("pipeline-id").unwrap()
         ),
         _ => {
-            println!("{}", matches.usage());
+            let _ = app.print_long_help();
+            println!();
             std::process::exit(1);
         }
     }
@@ -291,6 +295,9 @@ fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: 
         workspace, repo, pipeline_id
     ).as_str()).unwrap();
 
+    let sp = SpinnerBuilder::new("Fetching pipeline status...".into())
+        .spinner(SPINNER.to_vec()).start();
+
     loop {
         let response: Pipeline = fetch_handler(
             &client, &url, format!("pipeline {}", pipeline_id).as_str());
@@ -307,8 +314,8 @@ fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: 
                 stage.name.to_string()
             }
         };
-        println!("Pipeline ID: {}, State: {}, Stage: {}",
-                 response.uuid, response.state.name, stage);
+        sp.update(format!("Pipeline ID: {}, State: {}, Stage: {}",
+                 response.uuid, response.state.name, stage));
 
         if response.state.name != PipelineStates::IN_PROGRESS ||
             stage == PipelineStages::PAUSED.to_string().as_str() {
