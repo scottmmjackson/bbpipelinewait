@@ -35,7 +35,8 @@ const IN_PROGRESS_STATES_QUERY: &str = "status=PENDING&status=BUILDING&status=IN
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, EnumString, Deserialize, Display, Clone)]
 enum PipelineStages {
-    PAUSED
+    PAUSED,
+    RUNNING
 }
 
 #[allow(non_camel_case_types)]
@@ -64,6 +65,7 @@ struct PipelineState {
 #[derive(Debug, Deserialize, Clone)]
 struct Pipeline {
     uuid: String,
+    build_number: u32,
     state: PipelineState,
 }
 
@@ -80,6 +82,7 @@ struct PipelinesResponse {
     // previous: Option<String>
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Debug, Deserialize, Clone)]
 struct BitbucketErrorObject {
     message: String,
@@ -272,7 +275,8 @@ fn list_running_pipelines(config: &ConfigFile, workspace: &str, repo: &str) {
 
     let num_in_progress = pipelines.iter()
         .map(|pipeline| {
-            println!("Pipeline ID: {}, State: {}", pipeline.uuid, pipeline.state.name);
+            println!("Pipeline ID: {}, Build Number: {} State: {}",
+                     pipeline.uuid, pipeline.build_number, pipeline.state.name);
             pipeline
         })
         .count();
