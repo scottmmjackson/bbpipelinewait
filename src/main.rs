@@ -109,6 +109,7 @@ fn main() {
                         .short("w")
                         .long("workspace")
                         .value_name("workspace")
+                        .env("BITBUCKET_WORKSPACE")
                         .help("Bitbucket workspace")
                         .required(true))
                 .arg(
@@ -116,6 +117,7 @@ fn main() {
                         .short("r")
                         .long("repo")
                         .value_name("repo")
+                        .env("BITBUCKET_REPOSITORY")
                         .help("Bitbucket repository")
                         .required(true))
         )
@@ -127,6 +129,7 @@ fn main() {
                         .short("w")
                         .long("workspace")
                         .value_name("workspace")
+                        .env("BITBUCKET_WORKSPACE")
                         .help("Bitbucket workspace")
                         .required(true))
                 .arg(
@@ -134,6 +137,7 @@ fn main() {
                         .short("r")
                         .long("repo")
                         .value_name("repo")
+                        .env("BITBUCKET_REPOSITORY")
                         .help("Bitbucket repository")
                         .required(true))
                 .arg(
@@ -141,6 +145,7 @@ fn main() {
                         .short("p")
                         .long("pipeline-id")
                         .value_name("pipeline-id")
+                        .env("BITBUCKET_PIPELINE_ID")
                         .help("Bitbucket pipeline ID")
                         .required(true))
         )
