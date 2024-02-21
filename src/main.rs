@@ -4,7 +4,7 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use base64::{engine, Engine};
-use reqwest::Url;
+use reqwest::{Url};
 use serde::de::DeserializeOwned;
 use spinner::{SpinnerBuilder};
 use strum_macros::{Display, EnumString};
@@ -39,7 +39,8 @@ const IN_PROGRESS_STATES_QUERY: &str = "status=PENDING&status=BUILDING&status=IN
 #[derive(Debug, PartialEq, EnumString, Deserialize, Display, Clone)]
 enum PipelineStages {
     PAUSED,
-    RUNNING
+    RUNNING,
+    PENDING
 }
 
 #[allow(non_camel_case_types)]
@@ -146,8 +147,8 @@ fn main() {
                         .long("pipeline-id")
                         .value_name("pipeline-id")
                         .env("BITBUCKET_PIPELINE_ID")
-                        .help("Bitbucket pipeline ID")
-                        .required(true))
+                        .help("Bitbucket pipeline ID. If left out, we'll attempt to list all \
+                        pipelines and select the only running one, if any."))
         )
         .subcommand(
             SubCommand::with_name("init")
@@ -162,17 +163,49 @@ fn main() {
 
 
     match matches.subcommand_name() {
-        Some("list") => list_running_pipelines(
-            &config,
-            matches.subcommand_matches("list").unwrap().value_of("workspace").unwrap(),
-            matches.subcommand_matches("list").unwrap().value_of("repo").unwrap()
-        ),
-        Some("wait") => poll_pipeline(
-            &config,
-            matches.subcommand_matches("wait").unwrap().value_of("workspace").unwrap(),
-            matches.subcommand_matches("wait").unwrap().value_of("repo").unwrap(),
-            matches.subcommand_matches("wait").unwrap().value_of("pipeline-id").unwrap()
-        ),
+        Some("list") => {
+            let pipelines = get_running_pipelines(
+                &config,
+                matches.subcommand_matches("list").unwrap().value_of("workspace").unwrap(),
+                matches.subcommand_matches("list").unwrap().value_of("repo").unwrap()
+            );
+            list_running_pipelines(pipelines);
+        },
+        Some("wait") => {
+            let workspace = matches.subcommand_matches("wait").unwrap()
+                .value_of("workspace").unwrap();
+            let repo = matches.subcommand_matches("wait").unwrap()
+                .value_of("repo").unwrap();
+            let pipeline_id = matches.subcommand_matches("wait").unwrap()
+                .value_of("pipeline-id");
+            if let Some(id) = pipeline_id {
+                poll_pipeline(
+                    &config,
+                    workspace,
+                    repo,
+                    id
+                );
+                std::process::exit(1);
+            } else {
+                let pipelines = get_running_pipelines(&config, &workspace, &repo);
+                if pipelines.len() != 1 {
+                    println!("ERROR: Pipeline ID can only be elided if there's only one running \
+                        pipeline. Listing running pipelines:");
+                    list_running_pipelines(pipelines);
+                    std::process::exit(1);
+                } else {
+                    let build_number = pipelines.get(0).unwrap().build_number.to_string();
+                    let id = build_number.as_str();
+                    poll_pipeline(
+                        &config,
+                        workspace,
+                        repo,
+                        id
+                    );
+                }
+            }
+
+        },
         _ => {
             let _ = app.print_long_help();
             println!();
@@ -272,16 +305,17 @@ fn load_config() -> ConfigFile {
     }
 }
 
-fn list_running_pipelines(config: &ConfigFile, workspace: &str, repo: &str) {
-    println!("Listing running pipelines");
+fn get_running_pipelines(config: &ConfigFile, workspace: &str, repo: &str) -> Vec<Pipeline> {
     let client = create_authenticated_client(config);
     let url = Url::parse(format!(
         "https://api.bitbucket.org/2.0/repositories/{}/{}/pipelines/?{}",
         workspace, repo, IN_PROGRESS_STATES_QUERY
     ).as_str()).unwrap();
 
-    let pipelines = get_pipelines_responses(url, client);
+    get_pipelines_responses(url, client)
+}
 
+fn list_running_pipelines(pipelines: Vec<Pipeline>) {
     let num_in_progress = pipelines.iter()
         .map(|pipeline| {
             println!("Pipeline ID: {}, Build Number: {} State: {}",
@@ -289,7 +323,6 @@ fn list_running_pipelines(config: &ConfigFile, workspace: &str, repo: &str) {
             pipeline
         })
         .count();
-
     println!("{} pipelines, {} in progress.", pipelines.iter().count(), num_in_progress)
 }
 
