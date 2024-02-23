@@ -1,6 +1,7 @@
 [package]
 name = "bbpipelinewait"
-version = "1.0.4"
+version = "1.0.5"
+description = "Tool to list running bitbucket pipelines and wait for them to stop."
 edition = "2021"
 
 [dependencies]

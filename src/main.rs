@@ -1,4 +1,4 @@
-use clap::{App, Arg, SubCommand};
+use clap::{App, Arg, crate_description, crate_name, crate_version, SubCommand};
 use directories::ProjectDirs;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,8 @@ enum PipelineStates {
 }
 
 // Derived from inspecting the pipelines filters in the Bitbucket UI
-const IN_PROGRESS_STATES_QUERY: &str = "status=PENDING&status=BUILDING&status=IN_PROGRESS";
+const IN_PROGRESS_STATES_QUERY: &str = "status=PENDING&status=BUILDING&status=IN_PROGRESS&fields=\
+%2Bvalues.target.commit.message";
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, EnumString, Deserialize, Display, Clone)]
@@ -67,10 +68,28 @@ struct PipelineState {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+struct PipelineCreator {
+    display_name: String
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct PipelineCommit {
+    message: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct PipelineTarget {
+    ref_name: String,
+    commit: PipelineCommit
+}
+
+#[derive(Debug, Deserialize, Clone)]
 struct Pipeline {
     uuid: String,
     build_number: u32,
     state: PipelineState,
+    creator: PipelineCreator,
+    target: PipelineTarget
 }
 
 #[allow(dead_code)]
@@ -99,9 +118,9 @@ struct BitbucketError {
 }
 
 fn main() {
-    let mut app = App::new("bbpipelinewait")
-        .version("1.0")
-        .about("Tool to list running bitbucket pipelines and wait for them to stop.")
+    let mut app = App::new(crate_name!())
+        .version(crate_version!())
+        .about(crate_description!())
         .subcommand(
             SubCommand::with_name("list")
                 .about("Lists all running bitbucket pipelines.")
@@ -318,8 +337,16 @@ fn get_running_pipelines(config: &ConfigFile, workspace: &str, repo: &str) -> Ve
 fn list_running_pipelines(pipelines: Vec<Pipeline>) {
     let num_in_progress = pipelines.iter()
         .map(|pipeline| {
-            println!("Pipeline ID: {}, Build Number: {} State: {}",
-                     pipeline.uuid, pipeline.build_number, pipeline.state.name);
+            let commit_message = pipeline.target.commit.message
+                .replace("\n","");
+            println!("Build Number: {build_number} Author: {author}, Branch: {branch}, \
+            Commit Message: {commit_message} State: {state}",
+                build_number = pipeline.build_number,
+                author = pipeline.creator.display_name,
+                branch = pipeline.target.ref_name,
+                commit_message = commit_message,
+                state = pipeline.state.name
+                     );
             pipeline
         })
         .count();
@@ -329,7 +356,7 @@ fn list_running_pipelines(pipelines: Vec<Pipeline>) {
 fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: &str) {
     let client = create_authenticated_client(config);
     let url = Url::parse(format!(
-        "https://api.bitbucket.org/2.0/repositories/{}/{}/pipelines/{}/",
+        "https://api.bitbucket.org/2.0/repositories/{}/{}/pipelines/{}/?fields=%2Btarget.commit.message",
         workspace, repo, pipeline_id
     ).as_str()).unwrap();
 
@@ -352,8 +379,15 @@ fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: 
                 stage.name.to_string()
             }
         };
-        sp.update(format!("Pipeline ID: {}, State: {}, Stage: {}",
-                 response.uuid, response.state.name, stage));
+        let commit_message = response.target.commit.message
+            .replace("\n","");
+        sp.update(format!("Build Number: {build_number}, Author: {author}, Branch: {branch}, \
+        Commit Message: {commit_message} State: {state}, Stage: {stage}",
+                          build_number = response.build_number,
+                          author = response.creator.display_name,
+                          branch = response.target.ref_name,
+                          commit_message = commit_message,
+                          state = response.state.name));
 
         if response.state.name != PipelineStates::IN_PROGRESS ||
             stage == PipelineStages::PAUSED.to_string().as_str() {
