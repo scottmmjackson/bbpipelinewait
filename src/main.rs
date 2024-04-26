@@ -1,8 +1,9 @@
-use clap::{App, Arg, crate_description, crate_name, crate_version, SubCommand};
+use clap::{Arg, ArgMatches, command, Command};
 use directories::ProjectDirs;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::ops::Add;
 use base64::{engine, Engine};
 use reqwest::{Url};
 use serde::de::DeserializeOwned;
@@ -10,6 +11,8 @@ use spinner::{SpinnerBuilder};
 use strum_macros::{Display, EnumString};
 #[allow(unused_imports)]
 use strum;
+use termsize;
+use termsize::Size;
 
 const SPINNER: [&str; 4] = ["▖", "▘","▝","▗"];
 
@@ -118,23 +121,21 @@ struct BitbucketError {
 }
 
 fn main() {
-    let mut app = App::new(crate_name!())
-        .version(crate_version!())
-        .about(crate_description!())
+    let mut app = command!()
         .subcommand(
-            SubCommand::with_name("list")
+            Command::new("list")
                 .about("Lists all running bitbucket pipelines.")
                 .arg(
-                    Arg::with_name("workspace")
-                        .short("w")
+                    Arg::new("workspace")
+                        .short('w')
                         .long("workspace")
                         .value_name("workspace")
                         .env("BITBUCKET_WORKSPACE")
                         .help("Bitbucket workspace")
                         .required(true))
                 .arg(
-                    Arg::with_name("repo")
-                        .short("r")
+                    Arg::new("repo")
+                        .short('r')
                         .long("repo")
                         .value_name("repo")
                         .env("BITBUCKET_REPOSITORY")
@@ -142,27 +143,27 @@ fn main() {
                         .required(true))
         )
         .subcommand(
-            SubCommand::with_name("wait")
+            Command::new("wait")
                 .about("Waits for the pipeline with the specified id to complete.")
                 .arg(
-                    Arg::with_name("workspace")
-                        .short("w")
+                    Arg::new("workspace")
+                        .short('w')
                         .long("workspace")
                         .value_name("workspace")
                         .env("BITBUCKET_WORKSPACE")
                         .help("Bitbucket workspace")
                         .required(true))
                 .arg(
-                    Arg::with_name("repo")
-                        .short("r")
+                    Arg::new("repo")
+                        .short('r')
                         .long("repo")
                         .value_name("repo")
                         .env("BITBUCKET_REPOSITORY")
                         .help("Bitbucket repository")
                         .required(true))
                 .arg(
-                    Arg::with_name("pipeline-id")
-                        .short("p")
+                    Arg::new("pipeline-id")
+                        .short('p')
                         .long("pipeline-id")
                         .value_name("pipeline-id")
                         .env("BITBUCKET_PIPELINE_ID")
@@ -170,7 +171,7 @@ fn main() {
                         pipelines and select the only running one, if any."))
         )
         .subcommand(
-            SubCommand::with_name("init")
+            Command::new("init")
                 .about("Initializes configuration file")
         );
     let matches = app.clone().get_matches();
@@ -183,20 +184,21 @@ fn main() {
 
     match matches.subcommand_name() {
         Some("list") => {
+            let mut list_command = matches.subcommand_matches("list").unwrap().clone();
+            let workspace = list_command.get_one::<String>("workspace").unwrap();
+            let repo = list_command.get_one::<String>("repo").unwrap();
             let pipelines = get_running_pipelines(
                 &config,
-                matches.subcommand_matches("list").unwrap().value_of("workspace").unwrap(),
-                matches.subcommand_matches("list").unwrap().value_of("repo").unwrap()
+                workspace,
+                repo
             );
             list_running_pipelines(pipelines);
         },
         Some("wait") => {
-            let workspace = matches.subcommand_matches("wait").unwrap()
-                .value_of("workspace").unwrap();
-            let repo = matches.subcommand_matches("wait").unwrap()
-                .value_of("repo").unwrap();
-            let pipeline_id = matches.subcommand_matches("wait").unwrap()
-                .value_of("pipeline-id");
+            let wait_command = matches.subcommand_matches("wait").unwrap().clone();
+            let workspace = wait_command.get_one::<String>("workspace").unwrap();
+            let repo = wait_command.get_one::<String>("repo").unwrap();
+            let pipeline_id = wait_command.get_one::<String>("pipeline-id");
             if let Some(id) = pipeline_id {
                 poll_pipeline(
                     &config,
@@ -381,13 +383,23 @@ fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: 
         };
         let commit_message = response.target.commit.message
             .replace("\n","");
-        sp.update(format!("Build Number: {build_number}, Author: {author}, Branch: {branch}, \
-        Commit Message: {commit_message} State: {state}, Stage: {stage}",
-                          build_number = response.build_number,
-                          author = response.creator.display_name,
-                          branch = response.target.ref_name,
-                          commit_message = commit_message,
-                          state = response.state.name));
+        let mut polling_message =
+            format!("Build Number: {build_number}, Author: {author}, Branch: {branch}, \
+            Commit Message: {commit_message} State: {state}, Stage: {stage}",
+                                      build_number = response.build_number,
+                                      author = response.creator.display_name,
+                                      branch = response.target.ref_name,
+                                      commit_message = commit_message,
+                                      state = response.state.name);
+
+        // Truncate to the width of the terminal minus the spinner.
+        let default_size = Size { rows: 0, cols: 40 };
+        let terminal_size = termsize::get().unwrap_or(default_size);
+        if polling_message.len() > (terminal_size.cols - 2) as usize {
+            polling_message.truncate(terminal_size.cols as usize-5);
+            polling_message = polling_message.add("...");
+        }
+        sp.update(polling_message);
 
         if response.state.name != PipelineStates::IN_PROGRESS ||
             stage == PipelineStages::PAUSED.to_string().as_str() {
