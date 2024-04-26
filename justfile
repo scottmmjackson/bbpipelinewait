@@ -65,8 +65,8 @@ archive-all:
     just target=x86_64-apple-darwin archive-tarball
     just target=aarch64-unknown-linux-gnu archive-tarball
     just target=x86_64-unknown-linux-gnu archive-tarball
-#    just target=aarch64-pc-windows-msvc binary_name=bbpipelinewait.exe archive-zip
     just target=x86_64-pc-windows-msvc binary_name=bbpipelinewait.exe archive-zip
+#    just target=aarch64-pc-windows-msvc binary_name=bbpipelinewait.exe archive-zip
 
 package:
     #!/usr/bin/env bash
