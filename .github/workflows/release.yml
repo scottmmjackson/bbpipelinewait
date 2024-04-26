@@ -89,23 +89,25 @@ jobs:
         with:
           name: x86_64-pc-windows-msvc
           path: target/x86_64-pc-windows-msvc/release/bbpipelinewait.exe
-  build-aarch64-pc-windows-msvc:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-          target: aarch64-pc-windows-msvc
-      - uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --target aarch64-pc-windows-msvc --release
-      - uses: actions/upload-artifact@v3
-        with:
-          name: aarch64-pc-windows-msvc
-          path: target/aarch64-pc-windows-msvc/release/bbpipelinewait.exe
+#### WINAPI IS BROKEN ####
+#  build-aarch64-pc-windows-msvc:
+#    runs-on: windows-latest
+#    steps:
+#      - uses: actions/checkout@v2
+#      - uses: actions-rs/toolchain@v1
+#        with:
+#          toolchain: stable
+#          override: true
+#          target: aarch64-pc-windows-msvc
+#      - uses: actions-rs/cargo@v1
+#        with:
+#          command: build
+#          args: --target aarch64-pc-windows-msvc --release
+#      - uses: actions/upload-artifact@v3
+#        with:
+#          name: aarch64-pc-windows-msvc
+#          path: target/aarch64-pc-windows-msvc/release/bbpipelinewait.exe
+####
   archive:
     permissions: write-all
     runs-on: ubuntu-latest
@@ -115,7 +117,7 @@ jobs:
       - build-aarch64-unknown-linux-gnu
       - build-x86_64-unknown-linux-gnu
       - build-x86_64-pc-windows-msvc
-      - build-aarch64-pc-windows-msvc
+#      - build-aarch64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v2
       - uses: actions/download-artifact@v3
@@ -138,10 +140,10 @@ jobs:
         with:
           name: x86_64-pc-windows-msvc
           path: target/x86_64-pc-windows-msvc/release/bbpipelinewait.exe
-      - uses: actions/download-artifact@v3
-        with:
-          name: aarch64-pc-windows-msvc
-          path: target/aarch64-pc-windows-msvc/release/bbpipelinewait.exe
+#      - uses: actions/download-artifact@v3
+#        with:
+#          name: aarch64-pc-windows-msvc
+#          path: target/aarch64-pc-windows-msvc/release/bbpipelinewait.exe
       - uses: extractions/setup-just@v1
       - uses: actions-rs/cargo@v1
         with:

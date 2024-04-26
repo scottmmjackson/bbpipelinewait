@@ -29,7 +29,7 @@ build-all: build-mac-m1 build-mac-x86 build-linux-amd64 build-linux-arm64
 
 build-windows:
 	just target=x86_64-pc-windows-msvc build
-	just target=aarch64-pc-windows-msvc build
+#	just target=aarch64-pc-windows-msvc build
 
 build-mac-m1:
     just target=aarch64-apple-darwin assert-darwin-host archive
@@ -57,7 +57,7 @@ archive: build
     just target={{target}} archive-{{archive_type}}
 
 archive-windows:
-    just target=aarch64-pc-windows-msvc archive
+#    just target=aarch64-pc-windows-msvc archive
     just target=x86_64-pc-windows-msvc archive
 
 archive-all:
@@ -65,7 +65,7 @@ archive-all:
     just target=x86_64-apple-darwin archive-tarball
     just target=aarch64-unknown-linux-gnu archive-tarball
     just target=x86_64-unknown-linux-gnu archive-tarball
-    just target=aarch64-pc-windows-msvc binary_name=bbpipelinewait.exe archive-zip
+#    just target=aarch64-pc-windows-msvc binary_name=bbpipelinewait.exe archive-zip
     just target=x86_64-pc-windows-msvc binary_name=bbpipelinewait.exe archive-zip
 
 package:
@@ -118,8 +118,10 @@ upload-to-release:
         --clobber
 
 upload-to-release-ci:
-    just extra_packages="dist/x86_64-pc-windows-msvc/bbpipelinewait-{{version}}-x86_64-pc-windows-msvc.zip \
-    dist/aarch64-pc-windows-msvc/bbpipelinewait-{{version}}-aarch64-pc-windows-msvc.zip" upload-to-release
+    just extra_packages="dist/x86_64-pc-windows-msvc/bbpipelinewait-{{version}}-x86_64-pc-windows-msvc.zip" \
+    upload-to-release
+#    just extra_packages="dist/x86_64-pc-windows-msvc/bbpipelinewait-{{version}}-x86_64-pc-windows-msvc.zip \
+#    dist/aarch64-pc-windows-msvc/bbpipelinewait-{{version}}-aarch64-pc-windows-msvc.zip" upload-to-release
 
 homebrew-program:
     #!/usr/bin/env bash
@@ -166,7 +168,7 @@ do-release-package-preflight:
 
 do-release-package-preflight-ci: do-release-package-preflight
     @stat dist/x86_64-pc-windows-msvc/bbpipelinewait-{{version}}-x86_64-pc-windows-msvc.zip  > /dev/null
-    @stat dist/aarch64-pc-windows-msvc/bbpipelinewait-{{version}}-aarch64-pc-windows-msvc.zip > /dev/null
+#    @stat dist/aarch64-pc-windows-msvc/bbpipelinewait-{{version}}-aarch64-pc-windows-msvc.zip > /dev/null
 
 do-release-package: do-release-package-preflight linux-packages create-release upload-to-release homebrew-update
 
