@@ -4,6 +4,7 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::ops::Add;
+use std::process::exit;
 use base64::{engine, Engine};
 use reqwest::{Url};
 use serde::de::DeserializeOwned;
@@ -193,6 +194,7 @@ fn main() {
                 repo
             );
             list_running_pipelines(pipelines);
+            exit(0);
         },
         Some("wait") => {
             let wait_command = matches.subcommand_matches("wait").unwrap().clone();
@@ -206,14 +208,14 @@ fn main() {
                     repo,
                     id
                 );
-                std::process::exit(1);
+                exit(0);
             } else {
                 let pipelines = get_running_pipelines(&config, &workspace, &repo);
                 if pipelines.len() != 1 {
                     println!("ERROR: Pipeline ID can only be elided if there's only one running \
                         pipeline. Listing running pipelines:");
                     list_running_pipelines(pipelines);
-                    std::process::exit(1);
+                    exit(1);
                 } else {
                     let build_number = pipelines.get(0).unwrap().build_number.to_string();
                     let id = build_number.as_str();
@@ -223,6 +225,7 @@ fn main() {
                         repo,
                         id
                     );
+                    exit(0);
                 }
             }
 
@@ -230,7 +233,7 @@ fn main() {
         _ => {
             let _ = app.print_long_help();
             println!();
-            std::process::exit(1);
+            exit(1);
         }
     }
 }
@@ -248,17 +251,17 @@ fn fetch_handler<T: DeserializeOwned>(client: &Client, url: &Url, fetch_type: &s
                         let error = bitbucket_error.unwrap().error;
                         eprintln!("Error response for {}: {} - {}",
                         fetch_type, error.message, error.detail);
-                        std::process::exit(1);
+                        exit(1);
                     }
                     eprintln!("Error parsing response for {}: {}\nResponse text: {}",
                               fetch_type, e, response_text);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
         Err(e) => {
             eprintln!("Error fetching {}: {}", fetch_type, e);
-            std::process::exit(1);
+            exit(1);
         }
     }
 }
@@ -304,10 +307,10 @@ fn init_config() {
     };
     if config_file.exists() {
         eprintln!("'{}' already exists, not creating it.", config_file.to_str().unwrap());
-        std::process::exit(1);
+        exit(1);
     }
     fs::write(config_file, serde_json::to_string(&dummy_config).unwrap()).unwrap();
-    std::process::exit(0);
+    exit(0);
 }
 
 fn load_config() -> ConfigFile {
@@ -322,7 +325,7 @@ fn load_config() -> ConfigFile {
             "Config file not found at {:?}. Please create it with the required authentication details (username, app_password).",
             &config_path
         );
-        std::process::exit(1);
+        exit(1);
     }
 }
 
