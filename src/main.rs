@@ -1,5 +1,5 @@
 use base64::{engine, Engine};
-use clap::{command, Arg, ArgMatches, Command};
+use clap::{command, Arg, Command};
 use directories::ProjectDirs;
 use reqwest::blocking::Client;
 use reqwest::Url;
@@ -87,6 +87,7 @@ struct PipelineTarget {
     commit: PipelineCommit,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone)]
 struct Pipeline {
     uuid: String,
@@ -188,7 +189,7 @@ fn main() {
 
     match matches.subcommand_name() {
         Some("list") => {
-            let mut list_command = matches.subcommand_matches("list").unwrap().clone();
+            let list_command = matches.subcommand_matches("list").unwrap().clone();
             let workspace = list_command.get_one::<String>("workspace").unwrap();
             let repo = list_command.get_one::<String>("repo").unwrap();
             let pipelines = get_running_pipelines(&config, workspace, repo);
