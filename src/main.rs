@@ -1,21 +1,21 @@
-use clap::{Arg, ArgMatches, command, Command};
+use base64::{engine, Engine};
+use clap::{command, Arg, ArgMatches, Command};
 use directories::ProjectDirs;
 use reqwest::blocking::Client;
+use reqwest::Url;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use spinner::SpinnerBuilder;
 use std::fs;
 use std::ops::Add;
 use std::process::exit;
-use base64::{engine, Engine};
-use reqwest::{Url};
-use serde::de::DeserializeOwned;
-use spinner::{SpinnerBuilder};
-use strum_macros::{Display, EnumString};
 #[allow(unused_imports)]
 use strum;
+use strum_macros::{Display, EnumString};
 use termsize;
 use termsize::Size;
 
-const SPINNER: [&str; 4] = ["▖", "▘","▝","▗"];
+const SPINNER: [&str; 4] = ["▖", "▘", "▝", "▗"];
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ConfigFile {
@@ -33,7 +33,7 @@ enum PipelineStates {
     PAUSED,
     HALTED,
     PENDING,
-    BUILDING
+    BUILDING,
 }
 
 // Derived from inspecting the pipelines filters in the Bitbucket UI
@@ -45,13 +45,13 @@ const IN_PROGRESS_STATES_QUERY: &str = "status=PENDING&status=BUILDING&status=IN
 enum PipelineStages {
     PAUSED,
     RUNNING,
-    PENDING
+    PENDING,
 }
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, EnumString, Deserialize, Display, Clone)]
 enum PipelineResults {
-    FAILED
+    FAILED,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -61,19 +61,19 @@ struct PipelineStage {
 
 #[derive(Debug, Deserialize, Clone)]
 struct PipelineResult {
-    name: PipelineResults
+    name: PipelineResults,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 struct PipelineState {
     name: PipelineStates,
     stage: Option<PipelineStage>,
-    result: Option<PipelineResult>
+    result: Option<PipelineResult>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 struct PipelineCreator {
-    display_name: String
+    display_name: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -84,7 +84,7 @@ struct PipelineCommit {
 #[derive(Debug, Deserialize, Clone)]
 struct PipelineTarget {
     ref_name: String,
-    commit: PipelineCommit
+    commit: PipelineCommit,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -93,7 +93,7 @@ struct Pipeline {
     build_number: u32,
     state: PipelineState,
     creator: PipelineCreator,
-    target: PipelineTarget
+    target: PipelineTarget,
 }
 
 #[allow(dead_code)]
@@ -118,7 +118,7 @@ struct BitbucketErrorObject {
 
 #[derive(Debug, Deserialize, Clone)]
 struct BitbucketError {
-    error: BitbucketErrorObject
+    error: BitbucketErrorObject,
 }
 
 fn main() {
@@ -133,7 +133,8 @@ fn main() {
                         .value_name("workspace")
                         .env("BITBUCKET_WORKSPACE")
                         .help("Bitbucket workspace")
-                        .required(true))
+                        .required(true),
+                )
                 .arg(
                     Arg::new("repo")
                         .short('r')
@@ -141,7 +142,8 @@ fn main() {
                         .value_name("repo")
                         .env("BITBUCKET_REPOSITORY")
                         .help("Bitbucket repository")
-                        .required(true))
+                        .required(true),
+                ),
         )
         .subcommand(
             Command::new("wait")
@@ -153,7 +155,8 @@ fn main() {
                         .value_name("workspace")
                         .env("BITBUCKET_WORKSPACE")
                         .help("Bitbucket workspace")
-                        .required(true))
+                        .required(true),
+                )
                 .arg(
                     Arg::new("repo")
                         .short('r')
@@ -161,20 +164,21 @@ fn main() {
                         .value_name("repo")
                         .env("BITBUCKET_REPOSITORY")
                         .help("Bitbucket repository")
-                        .required(true))
+                        .required(true),
+                )
                 .arg(
                     Arg::new("pipeline-id")
                         .short('p')
                         .long("pipeline-id")
                         .value_name("pipeline-id")
                         .env("BITBUCKET_PIPELINE_ID")
-                        .help("Bitbucket pipeline ID. If left out, we'll attempt to list all \
-                        pipelines and select the only running one, if any."))
+                        .help(
+                            "Bitbucket pipeline ID. If left out, we'll attempt to list all \
+                        pipelines and select the only running one, if any.",
+                        ),
+                ),
         )
-        .subcommand(
-            Command::new("init")
-                .about("Initializes configuration file")
-        );
+        .subcommand(Command::new("init").about("Initializes configuration file"));
     let matches = app.clone().get_matches();
 
     if let Some(_) = matches.subcommand_matches("init") {
@@ -182,54 +186,40 @@ fn main() {
     }
     let config = load_config();
 
-
     match matches.subcommand_name() {
         Some("list") => {
             let mut list_command = matches.subcommand_matches("list").unwrap().clone();
             let workspace = list_command.get_one::<String>("workspace").unwrap();
             let repo = list_command.get_one::<String>("repo").unwrap();
-            let pipelines = get_running_pipelines(
-                &config,
-                workspace,
-                repo
-            );
+            let pipelines = get_running_pipelines(&config, workspace, repo);
             list_running_pipelines(pipelines);
             exit(0);
-        },
+        }
         Some("wait") => {
             let wait_command = matches.subcommand_matches("wait").unwrap().clone();
             let workspace = wait_command.get_one::<String>("workspace").unwrap();
             let repo = wait_command.get_one::<String>("repo").unwrap();
             let pipeline_id = wait_command.get_one::<String>("pipeline-id");
             if let Some(id) = pipeline_id {
-                poll_pipeline(
-                    &config,
-                    workspace,
-                    repo,
-                    id
-                );
+                poll_pipeline(&config, workspace, repo, id);
                 exit(0);
             } else {
                 let pipelines = get_running_pipelines(&config, &workspace, &repo);
                 if pipelines.len() != 1 {
-                    println!("ERROR: Pipeline ID can only be elided if there's only one running \
-                        pipeline. Listing running pipelines:");
+                    println!(
+                        "ERROR: Pipeline ID can only be elided if there's only one running \
+                        pipeline. Listing running pipelines:"
+                    );
                     list_running_pipelines(pipelines);
                     exit(1);
                 } else {
                     let build_number = pipelines.get(0).unwrap().build_number.to_string();
                     let id = build_number.as_str();
-                    poll_pipeline(
-                        &config,
-                        workspace,
-                        repo,
-                        id
-                    );
+                    poll_pipeline(&config, workspace, repo, id);
                     exit(0);
                 }
             }
-
-        },
+        }
         _ => {
             let _ = app.print_long_help();
             println!();
@@ -249,12 +239,16 @@ fn fetch_handler<T: DeserializeOwned>(client: &Client, url: &Url, fetch_type: &s
                         serde_json::from_str(response_text.as_str());
                     if bitbucket_error.is_ok() {
                         let error = bitbucket_error.unwrap().error;
-                        eprintln!("Error response for {}: {} - {}",
-                        fetch_type, error.message, error.detail);
+                        eprintln!(
+                            "Error response for {}: {} - {}",
+                            fetch_type, error.message, error.detail
+                        );
                         exit(1);
                     }
-                    eprintln!("Error parsing response for {}: {}\nResponse text: {}",
-                              fetch_type, e, response_text);
+                    eprintln!(
+                        "Error parsing response for {}: {}\nResponse text: {}",
+                        fetch_type, e, response_text
+                    );
                     exit(1);
                 }
             }
@@ -266,18 +260,24 @@ fn fetch_handler<T: DeserializeOwned>(client: &Client, url: &Url, fetch_type: &s
     }
 }
 
-fn get_pipelines_responses(url: Url, client: Client) -> Vec<Pipeline>{
+fn get_pipelines_responses(url: Url, client: Client) -> Vec<Pipeline> {
     let root: PipelinesResponse = fetch_handler(&client, &url, "pipeline list");
-    if root.page*root.pagelen > root.size {
+    if root.page * root.pagelen > root.size {
         Vec::from(root.values)
     } else {
         let mut cur = root.clone();
         let mut ret = Vec::from(root.values);
-        while cur.page*cur.pagelen < cur.size {
+        while cur.page * cur.pagelen < cur.size {
             let mut next_url = Url::parse(url.as_str()).unwrap();
-            next_url.set_query(Some(format!(
-                "{}&page={}&pagelen={}",IN_PROGRESS_STATES_QUERY, cur.page+1, cur.pagelen
-            ).as_str()));
+            next_url.set_query(Some(
+                format!(
+                    "{}&page={}&pagelen={}",
+                    IN_PROGRESS_STATES_QUERY,
+                    cur.page + 1,
+                    cur.pagelen
+                )
+                .as_str(),
+            ));
             cur = fetch_handler(&client, &next_url, "pipeline list");
             ret.append(&mut cur.values);
             println!("Fetched page {}", cur.page);
@@ -288,8 +288,7 @@ fn get_pipelines_responses(url: Url, client: Client) -> Vec<Pipeline>{
 
 fn init_config() {
     println!("Initializing config file.");
-    let project_dir = ProjectDirs::from
-        ("com", "scottmmjackson", "bbpipelinewait")
+    let project_dir = ProjectDirs::from("com", "scottmmjackson", "bbpipelinewait")
         .expect("Failed to get config directory.");
     let config_path = project_dir.config_dir();
     if !config_path.exists() {
@@ -306,7 +305,10 @@ fn init_config() {
         app_password: "my_app_password".to_string(),
     };
     if config_file.exists() {
-        eprintln!("'{}' already exists, not creating it.", config_file.to_str().unwrap());
+        eprintln!(
+            "'{}' already exists, not creating it.",
+            config_file.to_str().unwrap()
+        );
         exit(1);
     }
     fs::write(config_file, serde_json::to_string(&dummy_config).unwrap()).unwrap();
@@ -314,9 +316,10 @@ fn init_config() {
 }
 
 fn load_config() -> ConfigFile {
-    let config_path = ProjectDirs::from
-        ("com", "scottmmjackson", "bbpipelinewait")
-        .expect("Failed to open config directory.").config_dir().join("config.json");
+    let config_path = ProjectDirs::from("com", "scottmmjackson", "bbpipelinewait")
+        .expect("Failed to open config directory.")
+        .config_dir()
+        .join("config.json");
 
     if let Ok(contents) = fs::read_to_string(&config_path) {
         serde_json::from_str(&contents).expect("Failed to parse config file")
@@ -331,31 +334,40 @@ fn load_config() -> ConfigFile {
 
 fn get_running_pipelines(config: &ConfigFile, workspace: &str, repo: &str) -> Vec<Pipeline> {
     let client = create_authenticated_client(config);
-    let url = Url::parse(format!(
-        "https://api.bitbucket.org/2.0/repositories/{}/{}/pipelines/?{}",
-        workspace, repo, IN_PROGRESS_STATES_QUERY
-    ).as_str()).unwrap();
+    let url = Url::parse(
+        format!(
+            "https://api.bitbucket.org/2.0/repositories/{}/{}/pipelines/?{}",
+            workspace, repo, IN_PROGRESS_STATES_QUERY
+        )
+        .as_str(),
+    )
+    .unwrap();
 
     get_pipelines_responses(url, client)
 }
 
 fn list_running_pipelines(pipelines: Vec<Pipeline>) {
-    let num_in_progress = pipelines.iter()
+    let num_in_progress = pipelines
+        .iter()
         .map(|pipeline| {
-            let commit_message = pipeline.target.commit.message
-                .replace("\n","");
-            println!("Build Number: {build_number} Author: {author}, Branch: {branch}, \
+            let commit_message = pipeline.target.commit.message.replace("\n", "");
+            println!(
+                "Build Number: {build_number} Author: {author}, Branch: {branch}, \
             Commit Message: {commit_message} State: {state}",
                 build_number = pipeline.build_number,
                 author = pipeline.creator.display_name,
                 branch = pipeline.target.ref_name,
                 commit_message = commit_message,
                 state = pipeline.state.name
-                     );
+            );
             pipeline
         })
         .count();
-    println!("{} pipelines, {} in progress.", pipelines.iter().count(), num_in_progress)
+    println!(
+        "{} pipelines, {} in progress.",
+        pipelines.iter().count(),
+        num_in_progress
+    )
 }
 
 fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: &str) {
@@ -366,11 +378,12 @@ fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: 
     ).as_str()).unwrap();
 
     let sp = SpinnerBuilder::new("Fetching pipeline status...".into())
-        .spinner(SPINNER.to_vec()).start();
+        .spinner(SPINNER.to_vec())
+        .start();
 
     loop {
-        let response: Pipeline = fetch_handler(
-            &client, &url, format!("pipeline {}", pipeline_id).as_str());
+        let response: Pipeline =
+            fetch_handler(&client, &url, format!("pipeline {}", pipeline_id).as_str());
 
         let stage: String = match response.state.stage {
             None => {
@@ -380,32 +393,31 @@ fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: 
                     response.state.result.unwrap().name.to_string()
                 }
             }
-            Some(stage) => {
-                stage.name.to_string()
-            }
+            Some(stage) => stage.name.to_string(),
         };
-        let commit_message = response.target.commit.message
-            .replace("\n","");
-        let mut polling_message =
-            format!("Build Number: {build_number}, Author: {author}, Branch: {branch}, \
+        let commit_message = response.target.commit.message.replace("\n", "");
+        let mut polling_message = format!(
+            "Build Number: {build_number}, Author: {author}, Branch: {branch}, \
             Commit Message: {commit_message} State: {state}, Stage: {stage}",
-                                      build_number = response.build_number,
-                                      author = response.creator.display_name,
-                                      branch = response.target.ref_name,
-                                      commit_message = commit_message,
-                                      state = response.state.name);
+            build_number = response.build_number,
+            author = response.creator.display_name,
+            branch = response.target.ref_name,
+            commit_message = commit_message,
+            state = response.state.name
+        );
 
         // Truncate to the width of the terminal minus the spinner.
         let default_size = Size { rows: 0, cols: 40 };
         let terminal_size = termsize::get().unwrap_or(default_size);
         if polling_message.len() > (terminal_size.cols - 2) as usize {
-            polling_message.truncate(terminal_size.cols as usize-5);
+            polling_message.truncate(terminal_size.cols as usize - 5);
             polling_message = polling_message.add("...");
         }
         sp.update(polling_message);
 
-        if response.state.name != PipelineStates::IN_PROGRESS ||
-            stage == PipelineStages::PAUSED.to_string().as_str() {
+        if response.state.name != PipelineStates::IN_PROGRESS
+            || stage == PipelineStages::PAUSED.to_string().as_str()
+        {
             break;
         }
 
@@ -415,12 +427,9 @@ fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: 
 }
 
 fn create_authenticated_client(config: &ConfigFile) -> Client {
-    let bearer_token = engine::general_purpose::STANDARD.encode(
-        format!("{}:{}", config.username, config.app_password));
-    let auth_header = format!(
-        "Basic {}",
-        bearer_token
-    );
+    let bearer_token = engine::general_purpose::STANDARD
+        .encode(format!("{}:{}", config.username, config.app_password));
+    let auth_header = format!("Basic {}", bearer_token);
 
     let mut header_map = reqwest::header::HeaderMap::new();
     header_map.insert(reqwest::header::AUTHORIZATION, auth_header.parse().unwrap());
