@@ -120,27 +120,27 @@ jobs:
 #      - build-aarch64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: aarch64-apple-darwin
           path: target/aarch64-apple-darwin/release/bbpipelinewait
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: x86_64-apple-darwin
           path: target/x86_64-apple-darwin/release/bbpipelinewait
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: aarch64-unknown-linux-gnu
           path: target/aarch64-unknown-linux-gnu/release/bbpipelinewait
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: x86_64-unknown-linux-gnu
           path: target/x86_64-unknown-linux-gnu/release/bbpipelinewait
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: x86_64-pc-windows-msvc
           path: target/x86_64-pc-windows-msvc/release/bbpipelinewait.exe
-#      - uses: actions/download-artifact@v3
+#      - uses: actions/download-artifact@v4
 #        with:
 #          name: aarch64-pc-windows-msvc
 #          path: target/aarch64-pc-windows-msvc/release/bbpipelinewait.exe
