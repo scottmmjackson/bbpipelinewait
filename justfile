@@ -1,3 +1,4 @@
+rust_image := 'rust:1.80.1'
 target := `rustc -vV | sed -n 's|host: ||p'`
 os_family := os_family()
 archive_type := if os_family == "windows" { "zip" } else { "tarball" }
@@ -40,11 +41,11 @@ build-mac-x86:
 
 build-linux-amd64:
     docker run --rm --platform linux/amd64 --user "$(id -u)":"$(id -g)" -v "$PWD":/usr/src/myapp -w /usr/src/myapp \
-        rust:1.70.0 sh -c "cargo install just toml-cli && just archive"
+        {{ rust_image }} sh -c "cargo install just toml-cli && just archive"
 
 build-linux-arm64:
     docker run --rm --platform linux/arm64 --user "$(id -u)":"$(id -g)" -v "$PWD":/usr/src/myapp -w /usr/src/myapp \
-        rust:1.70.0 sh -c "cargo install just toml-cli && just archive"
+        {{ rust_image }} sh -c "cargo install just toml-cli && just archive"
 
 archive-tarball:
     mkdir -p dist/{{ target }}
@@ -83,10 +84,10 @@ package-termux:
     mkdir -p dist/{{ target }}
     mkdir -p dist/tmp/
     source build/{{ target }}.env
+    export DEBARCH="{{ if target =~ '^x86_64' { "amd64" } else { "aarch64" } }}"
     nfpm package -p {{ package_type }} \
-      -f <(VERSION={{ version }} BIND_FILE=/data/data/com.termux/files envsubst < build/nfpm.yaml.tmpl) \
+      -f <(VERSION={{ version }} BIND_FILE=/data/data/com.termux/files ARCH=${DEBARCH} envsubst < build/nfpm.yaml.tmpl) \
       --target dist/tmp/
-    export DEBARCH="{{ if target =~ '^x86_64' { "amd64" } else { "arm64" } }}"
     mv dist/tmp/bbpipelinewait_{{ version }}_${DEBARCH}.deb dist/{{ target }}/bbpipelinewait_{{ version }}_${DEBARCH}.termux.deb
     rmdir dist/tmp
 

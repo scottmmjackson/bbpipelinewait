@@ -1,26 +1,35 @@
+use std::error::Error;
 use base64::{engine, Engine};
 use clap::{command, Arg, Command};
 use directories::ProjectDirs;
-use reqwest::blocking::Client;
-use reqwest::Url;
+use reqwest::{Client, Url};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use spinner::SpinnerBuilder;
 use std::fs;
 use std::ops::Add;
 use std::process::exit;
+use std::time::Duration;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::policies::ExponentialBackoff;
+use reqwest_retry::RetryTransientMiddleware;
 #[allow(unused_imports)]
 use strum;
 use strum_macros::{Display, EnumString};
 use termsize;
 use termsize::Size;
+use tokio::time;
 
 const SPINNER: [&str; 4] = ["▖", "▘", "▝", "▗"];
 
 #[derive(Debug, Serialize, Deserialize)]
+/// Configuration file structure.
 struct ConfigFile {
+    /// Bitbucket username.
     username: String,
-    app_password: String, // or oauth_token, depending on your authentication method
+    /// Bitbucket app password or oauth token, depending on your authentication method. This can be
+    /// found in the Bitbucket UI.
+    app_password: String, // pragma: allowlist-secret
 }
 
 #[allow(non_camel_case_types)]
@@ -122,7 +131,8 @@ struct BitbucketError {
     error: BitbucketErrorObject,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     let mut app = command!()
         .subcommand(
             Command::new("list")
@@ -192,7 +202,8 @@ fn main() {
             let list_command = matches.subcommand_matches("list").unwrap().clone();
             let workspace = list_command.get_one::<String>("workspace").unwrap();
             let repo = list_command.get_one::<String>("repo").unwrap();
-            let pipelines = get_running_pipelines(&config, workspace, repo);
+            let pipelines =
+                get_running_pipelines(&config, workspace, repo).await?;
             list_running_pipelines(pipelines);
             exit(0);
         }
@@ -202,10 +213,10 @@ fn main() {
             let repo = wait_command.get_one::<String>("repo").unwrap();
             let pipeline_id = wait_command.get_one::<String>("pipeline-id");
             if let Some(id) = pipeline_id {
-                poll_pipeline(&config, workspace, repo, id);
+                poll_pipeline(&config, workspace, repo, id).await?;
                 exit(0);
             } else {
-                let pipelines = get_running_pipelines(&config, &workspace, &repo);
+                let pipelines = get_running_pipelines(&config, &workspace, &repo).await?;
                 if pipelines.len() != 1 {
                     println!(
                         "ERROR: Pipeline ID can only be elided if there's only one running \
@@ -216,7 +227,7 @@ fn main() {
                 } else {
                     let build_number = pipelines.get(0).unwrap().build_number.to_string();
                     let id = build_number.as_str();
-                    poll_pipeline(&config, workspace, repo, id);
+                    poll_pipeline(&config, workspace, repo, id).await?;
                     exit(0);
                 }
             }
@@ -229,42 +240,32 @@ fn main() {
     }
 }
 
-fn fetch_handler<T: DeserializeOwned>(client: &Client, url: &Url, fetch_type: &str) -> T {
-    match client.get(url.as_str()).send() {
-        Ok(response) => {
-            let response_text = response.text().unwrap();
-            match serde_json::from_str(response_text.as_str()) {
-                Ok(t) => t,
-                Err(e) => {
-                    let bitbucket_error: Result<BitbucketError, serde_json::Error> =
-                        serde_json::from_str(response_text.as_str());
-                    if bitbucket_error.is_ok() {
-                        let error = bitbucket_error.unwrap().error;
-                        eprintln!(
-                            "Error response for {}: {} - {}",
-                            fetch_type, error.message, error.detail
-                        );
-                        exit(1);
-                    }
-                    eprintln!(
-                        "Error parsing response for {}: {}\nResponse text: {}",
-                        fetch_type, e, response_text
-                    );
-                    exit(1);
-                }
-            }
-        }
+async fn fetch_handler<T: DeserializeOwned>(client: &ClientWithMiddleware, url: &Url, fetch_type: &str) -> Result<T, Box<dyn Error>> {
+    let response = client.get(url.as_str()).send().await?;
+    let response_text = response.text().await?;
+    match serde_json::from_str::<T>(&response_text) {
+        Ok(t) => Ok(t),
         Err(e) => {
-            eprintln!("Error fetching {}: {}", fetch_type, e);
+            if let Ok(error) = serde_json::from_str::<BitbucketError>(&response_text) {
+                eprintln!(
+                    "Error response for {}: {} - {}",
+                    fetch_type, error.error.message, error.error.detail
+                );
+                exit(1);
+            }
+            eprintln!(
+                "Error parsing response for {}: {}\nResponse text: {}",
+                fetch_type, e, response_text
+            );
             exit(1);
         }
     }
 }
 
-fn get_pipelines_responses(url: Url, client: Client) -> Vec<Pipeline> {
-    let root: PipelinesResponse = fetch_handler(&client, &url, "pipeline list");
+async fn get_pipelines_responses(url: Url, client: ClientWithMiddleware) -> Result<Vec<Pipeline>, Box<dyn Error>> {
+    let root: PipelinesResponse = fetch_handler(&client, &url, "pipeline list").await?;
     if root.page * root.pagelen > root.size {
-        Vec::from(root.values)
+        Ok(Vec::from(root.values))
     } else {
         let mut cur = root.clone();
         let mut ret = Vec::from(root.values);
@@ -279,11 +280,11 @@ fn get_pipelines_responses(url: Url, client: Client) -> Vec<Pipeline> {
                 )
                 .as_str(),
             ));
-            cur = fetch_handler(&client, &next_url, "pipeline list");
+            cur = fetch_handler(&client, &next_url, "pipeline list").await?;
             ret.append(&mut cur.values);
             println!("Fetched page {}", cur.page);
         }
-        ret
+        Ok(ret)
     }
 }
 
@@ -303,7 +304,7 @@ fn init_config() {
     let config_file = config_path.join("config.json");
     let dummy_config = ConfigFile {
         username: "my_username".to_string(),
-        app_password: "my_app_password".to_string(),
+        app_password: "my_app_password".to_string(), // pragma: allowlist-secret
     };
     if config_file.exists() {
         eprintln!(
@@ -333,7 +334,7 @@ fn load_config() -> ConfigFile {
     }
 }
 
-fn get_running_pipelines(config: &ConfigFile, workspace: &str, repo: &str) -> Vec<Pipeline> {
+async fn get_running_pipelines(config: &ConfigFile, workspace: &str, repo: &str) -> Result<Vec<Pipeline>, Box<dyn Error>> {
     let client = create_authenticated_client(config);
     let url = Url::parse(
         format!(
@@ -344,7 +345,7 @@ fn get_running_pipelines(config: &ConfigFile, workspace: &str, repo: &str) -> Ve
     )
     .unwrap();
 
-    get_pipelines_responses(url, client)
+    get_pipelines_responses(url, client).await
 }
 
 fn list_running_pipelines(pipelines: Vec<Pipeline>) {
@@ -371,7 +372,7 @@ fn list_running_pipelines(pipelines: Vec<Pipeline>) {
     )
 }
 
-fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: &str) {
+async fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: &str) -> Result<(), Box<dyn Error>> {
     let client = create_authenticated_client(config);
     let url = Url::parse(format!(
         "https://api.bitbucket.org/2.0/repositories/{}/{}/pipelines/{}/?fields=%2Btarget.commit.message",
@@ -382,9 +383,11 @@ fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: 
         .spinner(SPINNER.to_vec())
         .start();
 
+    let mut interval = time::interval(Duration::from_secs(10));
+
     loop {
         let response: Pipeline =
-            fetch_handler(&client, &url, format!("pipeline {}", pipeline_id).as_str());
+            fetch_handler(&client, &url, format!("pipeline {}", pipeline_id).as_str()).await?;
 
         let stage: String = match response.state.stage {
             None => {
@@ -423,20 +426,21 @@ fn poll_pipeline(config: &ConfigFile, workspace: &str, repo: &str, pipeline_id: 
         }
 
         // Wait for some time before polling again (e.g., 10 seconds)
-        std::thread::sleep(std::time::Duration::from_secs(10));
+        interval.tick().await;
     }
+    Ok(())
 }
 
-fn create_authenticated_client(config: &ConfigFile) -> Client {
+fn create_authenticated_client(config: &ConfigFile) -> ClientWithMiddleware {
     let bearer_token = engine::general_purpose::STANDARD
         .encode(format!("{}:{}", config.username, config.app_password));
     let auth_header = format!("Basic {}", bearer_token);
 
     let mut header_map = reqwest::header::HeaderMap::new();
     header_map.insert(reqwest::header::AUTHORIZATION, auth_header.parse().unwrap());
+    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
 
-    Client::builder()
-        .default_headers(header_map)
+    ClientBuilder::new(Client::builder().default_headers(header_map).build().unwrap())
+        .with(RetryTransientMiddleware::new_with_policy(retry_policy))
         .build()
-        .unwrap()
 }

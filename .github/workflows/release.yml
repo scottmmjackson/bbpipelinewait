@@ -160,4 +160,4 @@ jobs:
           ssh-private-key: ${{ secrets.BBPIPELINEWAIT_DEPLOY_KEY }}
       - run: just archive-all do-release-package-ci
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_PAT }}
