@@ -1,4 +1,4 @@
-rust_image := 'rust:1.80.1'
+rust_image := 'rust:1.88.0'
 target := `rustc -vV | sed -n 's|host: ||p'`
 os_family := os_family()
 archive_type := if os_family == "windows" { "zip" } else { "tarball" }
@@ -113,13 +113,14 @@ upload-to-release:
         dist/aarch64-unknown-linux-gnu/bbpipelinewait-{{ version }}-aarch64-unknown-linux-gnu.tar.gz \
         dist/aarch64-unknown-linux-gnu/bbpipelinewait-{{ version }}-1.aarch64.rpm \
         dist/aarch64-unknown-linux-gnu/bbpipelinewait_{{ version }}_arm64.deb \
-        dist/aarch64-unknown-linux-gnu/bbpipelinewait_{{ version }}_arm64.termux.deb \
         dist/x86_64-unknown-linux-gnu/bbpipelinewait-{{ version }}-x86_64-unknown-linux-gnu.tar.gz \
         dist/x86_64-unknown-linux-gnu/bbpipelinewait-{{ version }}-1.x86_64.rpm \
         dist/x86_64-unknown-linux-gnu/bbpipelinewait_{{ version }}_amd64.deb \
-        dist/x86_64-unknown-linux-gnu/bbpipelinewait_{{ version }}_amd64.termux.deb \
         {{ extra_packages }} \
         --clobber
+
+#       dist/aarch64-unknown-linux-gnu/bbpipelinewait_{{ version }}_arm64.termux.deb \
+#       dist/x86_64-unknown-linux-gnu/bbpipelinewait_{{ version }}_amd64.termux.deb \
 
 upload-to-release-ci:
     just extra_packages="dist/x86_64-pc-windows-msvc/bbpipelinewait-{{ version }}-x86_64-pc-windows-msvc.zip" \
