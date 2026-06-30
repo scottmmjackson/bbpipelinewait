@@ -10,6 +10,7 @@ section: "default"
 priority: "extra"
 provides:
   - "bbpipelinewait"
+  - "bbpw-ui"
 maintainer: "Scott Jackson <scottmmjackson@gmail.com>"
 description: Tool to log to standard out when the status of a web service changes.
 homepage: "https://github.com/scottmmjackson/bbpipelinewait"
@@ -17,3 +18,5 @@ license: "BSD 3.0"
 contents:
 - src: ${BBPIPELINEWAIT_BINARY}
   dst: ${BIND_FILE}
+- src: ${BBPW_UI_BINARY}
+  dst: ${BBPW_UI_BIND_FILE}

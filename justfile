@@ -8,7 +8,8 @@ arch := arch()
 version := `toml get Cargo.toml package.version --raw`
 archive_name := "bbpipelinewait-" + version + "-" + target
 msg := "Unknown error"
-binary_name := if os_family == "windows" { "bbpipelinewait.exe" } else { "bbpipelinewait " }
+binary_name := if os_family == "windows" { "bbpipelinewait.exe" } else { "bbpipelinewait" }
+ui_binary_name := if os_family == "windows" { "bbpw-ui.exe" } else { "bbpw-ui" }
 notes := "release"
 extra_packages := ""
 
@@ -49,11 +50,11 @@ build-linux-arm64:
 
 archive-tarball:
     mkdir -p dist/{{ target }}
-    tar czf dist/{{ target }}/{{ archive_name }}.tar.gz -C target/{{ target }}/release/ {{ binary_name }}
+    tar czf dist/{{ target }}/{{ archive_name }}.tar.gz -C target/{{ target }}/release/ {{ binary_name }} {{ ui_binary_name }}
 
 archive-zip:
     mkdir -p dist/{{ target }}
-    zip dist/{{ target }}/{{ archive_name }}.zip target/{{ target }}/release/{{ binary_name }}
+    zip dist/{{ target }}/{{ archive_name }}.zip target/{{ target }}/release/{{ binary_name }} target/{{ target }}/release/{{ ui_binary_name }}
 
 archive: build
     just target={{ target }} archive-{{ archive_type }}
@@ -77,7 +78,7 @@ package:
     mkdir -p dist/{{ target }}
     source build/{{ target }}.env
     nfpm package -p {{ package_type }} \
-      -f <(VERSION={{ version }} BIND_FILE=/usr/bin/bbpipelinewait envsubst < build/nfpm.yaml.tmpl) --target dist/{{ target }}/
+      -f <(VERSION={{ version }} BIND_FILE=/usr/bin/bbpipelinewait BBPW_UI_BIND_FILE=/usr/bin/bbpw-ui envsubst < build/nfpm.yaml.tmpl) --target dist/{{ target }}/
 
 package-termux:
     #!/usr/bin/env bash
@@ -86,7 +87,7 @@ package-termux:
     source build/{{ target }}.env
     export DEBARCH="{{ if target =~ '^x86_64' { "amd64" } else { "aarch64" } }}"
     nfpm package -p {{ package_type }} \
-      -f <(VERSION={{ version }} BIND_FILE=/data/data/com.termux/files ARCH=${DEBARCH} envsubst < build/nfpm.yaml.tmpl) \
+      -f <(VERSION={{ version }} BIND_FILE=/data/data/com.termux/files BBPW_UI_BIND_FILE=/data/data/com.termux/files ARCH=${DEBARCH} envsubst < build/nfpm.yaml.tmpl) \
       --target dist/tmp/
     mv dist/tmp/bbpipelinewait_{{ version }}_${DEBARCH}.deb dist/{{ target }}/bbpipelinewait_{{ version }}_${DEBARCH}.termux.deb
     rmdir dist/tmp
@@ -171,6 +172,8 @@ do-release-package-preflight:
     # For linux packages
     @stat target/x86_64-unknown-linux-gnu/release/bbpipelinewait > /dev/null
     @stat target/aarch64-unknown-linux-gnu/release/bbpipelinewait > /dev/null
+    @stat target/x86_64-unknown-linux-gnu/release/bbpw-ui > /dev/null
+    @stat target/aarch64-unknown-linux-gnu/release/bbpw-ui > /dev/null
 
 do-release-package-preflight-ci: do-release-package-preflight
     @stat dist/x86_64-pc-windows-msvc/bbpipelinewait-{{ version }}-x86_64-pc-windows-msvc.zip  > /dev/null

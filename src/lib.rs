@@ -22,8 +22,12 @@ pub const SPINNER: [&str; 4] = ["▖", "▘", "▝", "▗"];
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ConfigFile {
+    // Your Atlassian account email, or the literal string "x-bitbucket-api-token-auth".
     pub username: String,
-    pub app_password: String, // pragma: allowlist-secret
+    // A Bitbucket-scoped Atlassian API token (app passwords are deprecated). Create one at
+    // id.atlassian.com via "Create API token with scopes", selecting Bitbucket as the app,
+    // with the read:pipeline:bitbucket and read:repository:bitbucket scopes.
+    pub api_token: String, // pragma: allowlist-secret
 }
 
 #[allow(non_camel_case_types)]
@@ -89,6 +93,7 @@ pub struct PipelineCommit {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct PipelineTarget {
+    #[serde(alias = "source")]
     pub ref_name: String,
     pub commit: PipelineCommit,
 }
@@ -134,7 +139,22 @@ pub async fn fetch_handler<T: DeserializeOwned>(
     fetch_type: &str,
 ) -> Result<T, Box<dyn Error>> {
     let response = client.get(url.as_str()).send().await?;
+    let status = response.status();
     let response_text = response.text().await?;
+
+    if status == reqwest::StatusCode::UNAUTHORIZED {
+        eprintln!(
+            "Authentication failed (401) for {}. Bitbucket app passwords are deprecated; \
+            `api_token` in your config must be a Bitbucket-scoped Atlassian API token, not an \
+            old app password. Create one at id.atlassian.com via \"Create API token with \
+            scopes\" (select Bitbucket as the app, with read:pipeline:bitbucket and \
+            read:repository:bitbucket scopes), and set `username` to your Atlassian account \
+            email or the literal string \"x-bitbucket-api-token-auth\".",
+            fetch_type
+        );
+        exit(1);
+    }
+
     match serde_json::from_str::<T>(&response_text) {
         Ok(t) => Ok(t),
         Err(e) => {
@@ -146,8 +166,8 @@ pub async fn fetch_handler<T: DeserializeOwned>(
                 exit(1);
             }
             eprintln!(
-                "Error parsing response for {}: {}\nResponse text: {}",
-                fetch_type, e, response_text
+                "Error parsing response for {}: {}\nURL: {}\nStatus: {}\nResponse text: {:?}",
+                fetch_type, e, url, status, response_text
             );
             exit(1);
         }
@@ -198,8 +218,8 @@ pub fn init_config() {
     }
     let config_file = config_path.join("config.json");
     let dummy_config = ConfigFile {
-        username: "my_username".to_string(),
-        app_password: "my_app_password".to_string(), // pragma: allowlist-secret
+        username: "my_username_or_email".to_string(),
+        api_token: "my_api_token".to_string(), // pragma: allowlist-secret
     };
     if config_file.exists() {
         eprintln!(
@@ -222,7 +242,7 @@ pub fn load_config() -> ConfigFile {
         serde_json::from_str(&contents).expect("Failed to parse config file")
     } else {
         eprintln!(
-            "Config file not found at {:?}. Please create it with the required authentication details (username, app_password).",
+            "Config file not found at {:?}. Please create it with the required authentication details (username, api_token).",
             &config_path
         );
         exit(1);
@@ -400,7 +420,7 @@ pub async fn poll_pipeline(
 
 pub fn create_authenticated_client(config: &ConfigFile) -> ClientWithMiddleware {
     let bearer_token = engine::general_purpose::STANDARD
-        .encode(format!("{}:{}", config.username, config.app_password));
+        .encode(format!("{}:{}", config.username, config.api_token));
     let auth_header = format!("Basic {}", bearer_token);
 
     let mut header_map = reqwest::header::HeaderMap::new();

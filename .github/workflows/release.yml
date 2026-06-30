@@ -22,6 +22,10 @@ jobs:
         with:
           name: aarch64-apple-darwin
           path: target/aarch64-apple-darwin/release/bbpipelinewait
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aarch64-apple-darwin-bbpw-ui
+          path: target/aarch64-apple-darwin/release/bbpw-ui
   build-x86_64-apple-darwin:
     runs-on: macos-latest
     steps:
@@ -39,6 +43,10 @@ jobs:
         with:
           name: x86_64-apple-darwin
           path: target/x86_64-apple-darwin/release/bbpipelinewait
+      - uses: actions/upload-artifact@v4
+        with:
+          name: x86_64-apple-darwin-bbpw-ui
+          path: target/x86_64-apple-darwin/release/bbpw-ui
   build-aarch64-unknown-linux-gnu:
     runs-on: ubuntu-latest
     steps:
@@ -55,6 +63,10 @@ jobs:
         with:
           name: aarch64-unknown-linux-gnu
           path: target/aarch64-unknown-linux-gnu/release/bbpipelinewait
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aarch64-unknown-linux-gnu-bbpw-ui
+          path: target/aarch64-unknown-linux-gnu/release/bbpw-ui
   build-x86_64-unknown-linux-gnu:
     runs-on: ubuntu-latest
     steps:
@@ -72,6 +84,10 @@ jobs:
         with:
           name: x86_64-unknown-linux-gnu
           path: target/x86_64-unknown-linux-gnu/release/bbpipelinewait
+      - uses: actions/upload-artifact@v4
+        with:
+          name: x86_64-unknown-linux-gnu-bbpw-ui
+          path: target/x86_64-unknown-linux-gnu/release/bbpw-ui
   build-x86_64-pc-windows-msvc:
     runs-on: windows-latest
     steps:
@@ -89,6 +105,10 @@ jobs:
         with:
           name: x86_64-pc-windows-msvc
           path: target/x86_64-pc-windows-msvc/release/bbpipelinewait.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: x86_64-pc-windows-msvc-bbpw-ui
+          path: target/x86_64-pc-windows-msvc/release/bbpw-ui.exe
 #### WINAPI IS BROKEN ####
 #  build-aarch64-pc-windows-msvc:
 #    runs-on: windows-latest
@@ -126,20 +146,40 @@ jobs:
           path: target/aarch64-apple-darwin/release/bbpipelinewait
       - uses: actions/download-artifact@v4
         with:
+          name: aarch64-apple-darwin-bbpw-ui
+          path: target/aarch64-apple-darwin/release/bbpw-ui
+      - uses: actions/download-artifact@v4
+        with:
           name: x86_64-apple-darwin
           path: target/x86_64-apple-darwin/release/bbpipelinewait
+      - uses: actions/download-artifact@v4
+        with:
+          name: x86_64-apple-darwin-bbpw-ui
+          path: target/x86_64-apple-darwin/release/bbpw-ui
       - uses: actions/download-artifact@v4
         with:
           name: aarch64-unknown-linux-gnu
           path: target/aarch64-unknown-linux-gnu/release/bbpipelinewait
       - uses: actions/download-artifact@v4
         with:
+          name: aarch64-unknown-linux-gnu-bbpw-ui
+          path: target/aarch64-unknown-linux-gnu/release/bbpw-ui
+      - uses: actions/download-artifact@v4
+        with:
           name: x86_64-unknown-linux-gnu
           path: target/x86_64-unknown-linux-gnu/release/bbpipelinewait
       - uses: actions/download-artifact@v4
         with:
+          name: x86_64-unknown-linux-gnu-bbpw-ui
+          path: target/x86_64-unknown-linux-gnu/release/bbpw-ui
+      - uses: actions/download-artifact@v4
+        with:
           name: x86_64-pc-windows-msvc
           path: target/x86_64-pc-windows-msvc/release/bbpipelinewait.exe
+      - uses: actions/download-artifact@v4
+        with:
+          name: x86_64-pc-windows-msvc-bbpw-ui
+          path: target/x86_64-pc-windows-msvc/release/bbpw-ui.exe
 #      - uses: actions/download-artifact@v4
 #        with:
 #          name: aarch64-pc-windows-msvc
