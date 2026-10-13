@@ -1,4 +1,4 @@
-rust_image := 'rust:1.88.0'
+rust_image := 'rust:1.89.0'
 target := `rustc -vV | sed -n 's|host: ||p'`
 os_family := os_family()
 archive_type := if os_family == "windows" { "zip" } else { "tarball" }
