@@ -70,10 +70,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .prompt()
         .unwrap_or(false);
 
-    let on_complete_cmd = Text::new("Run a command on completion? (leave blank to skip)")
+    let default_cmd = config
+        .default_on_complete
+        .as_deref()
+        .map(str::trim)
+        .filter(|c| !c.is_empty());
+    let on_complete_cmd = match default_cmd {
+        // Enter accepts the default, typed text overrides it, ESC skips.
+        Some(default_cmd) => Text::new(&format!(
+            "Run a command on completion? [{}] (ESC skips)",
+            default_cmd
+        ))
         .prompt()
-        .unwrap_or_default();
-    let on_complete_cmd = on_complete_cmd.trim().to_string();
+        .map(|input| match input.trim() {
+            "" => default_cmd.to_string(),
+            typed => typed.to_string(),
+        })
+        .unwrap_or_default(),
+        None => Text::new("Run a command on completion? (leave blank to skip)")
+            .prompt()
+            .unwrap_or_default()
+            .trim()
+            .to_string(),
+    };
 
     let final_pipeline = poll_pipeline(&config, workspace, repo, &pipeline_id).await?;
     let final_state = final_pipeline.state.name.to_string();

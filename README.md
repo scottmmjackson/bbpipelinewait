@@ -43,6 +43,7 @@ This writes a template to your OS config directory and prints the path. Fill it 
 
 - `username` is your Atlassian account email, or the literal string `x-bitbucket-api-token-auth`.
 - `api_token` must be a **scoped Atlassian API token**, not a Bitbucket app password — app passwords are deprecated and no longer work. Create one at [id.atlassian.com](https://id.atlassian.com) under *Security → Create and manage API tokens → Create API token with scopes*, selecting **Bitbucket** as the app, with at least the `read:pipeline:bitbucket` and `read:repository:bitbucket` scopes.
+- `default_on_complete` (optional) is a shell command `bbpw-ui` offers to run on completion. The prompt shows it as `Run a command on completion? [<command>] (ESC skips)`: press Enter to accept it, type a different command to override it, or press ESC to skip.
 
 ## Usage
 

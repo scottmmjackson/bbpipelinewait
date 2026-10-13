@@ -28,6 +28,9 @@ pub struct ConfigFile {
     // id.atlassian.com via "Create API token with scopes", selecting Bitbucket as the app,
     // with the read:pipeline:bitbucket and read:repository:bitbucket scopes.
     pub api_token: String, // pragma: allowlist-secret
+    // Optional shell command bbpw-ui offers to run on completion by default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_on_complete: Option<String>,
 }
 
 #[allow(non_camel_case_types)]
@@ -220,6 +223,7 @@ pub fn init_config() {
     let dummy_config = ConfigFile {
         username: "my_username_or_email".to_string(),
         api_token: "my_api_token".to_string(), // pragma: allowlist-secret
+        default_on_complete: None,
     };
     if config_file.exists() {
         eprintln!(
